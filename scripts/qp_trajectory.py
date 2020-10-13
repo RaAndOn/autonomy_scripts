@@ -173,10 +173,23 @@ def full_task_space_constraints(polynomial_degree, constraint_degree, task_space
     return full_constraint_constants, full_constraint_exponential
 
 
-def trajectory(polynomial_degree, differentiation_degree,
-               time_waypoints, pos_waypoints):
+def qp_trajectory(polynomial_degree, differentiation_degree,
+                  time_waypoints, pos_waypoints):
     """
+    This function determins an Nth degree continuous polynomial for each variable
+    in the task space that minimizes the cost of the polynomial against the Mth derivative
+    of the polynomial. The polynomials are also contrained by the time and waypoints passed in
+
+    Parameters
+    polynomial_degree - Degree of the polynomial
+    constraint_degree - Number of degrees of differentiation to which the polynomial is contrained
+    time_waypoints - Times at which each waypoint occur
+    pos_waypoints - Positions defining each waypoints
+
+    Return
+    Coefficients defining trajectory polynomials
     """
+    # Initialize variables
     num_waypoints = time_waypoints.shape[0]
     task_space_size = pos_waypoints.shape[1]
 
@@ -186,37 +199,55 @@ def trajectory(polynomial_degree, differentiation_degree,
     constraint_constants_matrix, constraint_exponentials_matrix = full_task_space_constraints(
         polynomial_degree, 3, task_space_size)
 
+    # Numerically integrate cost function
     tf = time_waypoints[1]
     ti = time_waypoints[0]
     cost_function_matrix = cost_constants_matrix * (np.power(tf, cost_exponential_matrix) -
                                                     np.power(ti, cost_exponential_matrix))
+
+    # Create constraint matrix for time bounds
     constraint_start_matrix = constraint_constants_matrix * \
         np.power(ti, constraint_exponentials_matrix)
     constraint_goal_matrix = constraint_constants_matrix * \
         np.power(tf, constraint_exponentials_matrix)
     constraint_function_matrix = np.vstack(
         (constraint_start_matrix, constraint_goal_matrix))
+
+    # Build a righthand-side vector using the constraints
     constraint_start = np.zeros(constraint_constants_matrix.shape[0])
     constraint_goal = np.zeros(constraint_constants_matrix.shape[0])
     constraint_start[::3] = pos_waypoints[0, :]
     constraint_goal[::3] = pos_waypoints[1, :]
     rhs = np.hstack(
         (np.zeros(cost_function_matrix.shape[0]), constraint_start, constraint_goal))
-    solution = qp_solve(cost_function_matrix,
-                        constraint_function_matrix, np.reshape(rhs, (rhs.shape[0], 1)))
-    coeffs = np.reshape(solution[:-constraint_function_matrix.shape[0]],
-                        (task_space_size, polynomial_degree+1))
 
-    print(coeffs)
-    return coeffs
+    # Solution vector from lagrange multipliers [ lagrange multipliers, coefficients ].T
+    solution = lagrange_multipliers_solve(cost_function_matrix,
+                                          constraint_function_matrix, np.reshape(rhs, (rhs.shape[0], 1)))
+
+    # Strip lagrange multipliers from the solution and reshape coefficients so each row corresponds to a task space
+    coefficients = np.reshape(solution[:-constraint_function_matrix.shape[0]],
+                              (task_space_size, polynomial_degree+1))
+
+    # Return coefficients
+    return coefficients
 
 
-def qp_solve(cost, constraint_eqn, rhs):
+def lagrange_multipliers_solve(cost_matrix, constraint_matrix, rhs):
     """
+    This function builds and solves 
+
+    Parameters
+    cost_matrix - 
+    constraint_matrix - 
+    rhs -
+
+    Return
+
     """
-    block1 = np.vstack((2*cost, constraint_eqn))
-    block2 = np.vstack((constraint_eqn.T, np.zeros(
-        (constraint_eqn.shape[0], constraint_eqn.shape[0]))))
+    block1 = np.vstack((2*cost_matrix, constraint_matrix))
+    block2 = np.vstack((constraint_matrix.T, np.zeros(
+        (constraint_matrix.shape[0], constraint_matrix.shape[0]))))
 
     bigblock = np.hstack((block1, block2))
     return np.linalg.pinv(bigblock) @ rhs
@@ -228,8 +259,8 @@ if __name__ == "__main__":
     time_waypoints = np.array([0, 5])  # t1, t2, t3
     polynomial_degree = 7
     differentiation_degree = 4
-    coeffs = trajectory(polynomial_degree, differentiation_degree,
-                        time_waypoints, pos_waypoints)
+    coeffs = qp_trajectory(polynomial_degree, differentiation_degree,
+                           time_waypoints, pos_waypoints)
 
     times = np.linspace(0, 5, 11)
     x = np.array([np.polyval(np.flip(coeffs[0, :], axis=0), t) for t in times])
