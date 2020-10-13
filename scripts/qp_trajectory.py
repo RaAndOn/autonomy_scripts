@@ -222,11 +222,11 @@ def qp_trajectory(polynomial_degree, differentiation_degree,
         (np.zeros(cost_function_matrix.shape[0]), constraint_start, constraint_goal))
 
     # Solution vector from lagrange multipliers [ lagrange multipliers, coefficients ].T
-    solution = lagrange_multipliers_solve(cost_function_matrix,
-                                          constraint_function_matrix, np.reshape(rhs, (rhs.shape[0], 1)))
+    lagrange_multipliers_and_coefficients = lagrange_multipliers_solve(cost_function_matrix,
+                                                                       constraint_function_matrix, np.reshape(rhs, (rhs.shape[0], 1)))
 
     # Strip lagrange multipliers from the solution and reshape coefficients so each row corresponds to a task space
-    coefficients = np.reshape(solution[:-constraint_function_matrix.shape[0]],
+    coefficients = np.reshape(lagrange_multipliers_and_coefficients[:-constraint_function_matrix.shape[0]],
                               (task_space_size, polynomial_degree+1))
 
     # Return coefficients
@@ -235,21 +235,23 @@ def qp_trajectory(polynomial_degree, differentiation_degree,
 
 def lagrange_multipliers_solve(cost_matrix, constraint_matrix, rhs):
     """
-    This function builds and solves 
+    This function solves for the coefficients and lagrange
+    multipliers of the cost matrix and constraints
 
     Parameters
-    cost_matrix - 
-    constraint_matrix - 
-    rhs -
+    cost_matrix - Time dependent part of the cost function
+    constraint_matrix - Contraint equations
+    rhs - [ 0 ; contraint values ]
 
     Return
 
     """
+    # Assemble matrix
     block1 = np.vstack((2*cost_matrix, constraint_matrix))
     block2 = np.vstack((constraint_matrix.T, np.zeros(
         (constraint_matrix.shape[0], constraint_matrix.shape[0]))))
-
     bigblock = np.hstack((block1, block2))
+    # Solve for [ lagrange multipliers ; coefficients ]
     return np.linalg.pinv(bigblock) @ rhs
 
 
