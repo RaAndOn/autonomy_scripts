@@ -5,119 +5,185 @@ import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
 
 
-def differentiate_polynomial(poly_deg, diff_deg):
+def differentiate_polynomial(polynomial_degree, differentiation_degree):
     """
-    """
-    # Initialize the variable exponents for each term in the polynomial
-    polynomial_exponential = np.reshape(
-        np.arange(poly_deg + 1, dtype=int), (poly_deg + 1, 1))
-    polynomial_constants = np.reshape(
-        np.ones(poly_deg + 1, dtype=int), (poly_deg + 1, 1))
+    This function creates a representation of polynomial with no coefficients
+    and then differentiates the polynomial returning the new polynomial with 
+    constant multipliers
 
-    # Differentiate polynomial
-    for diff in range(diff_deg):
+    Parameters
+    polynomial_degree - Degree of the polynomial
+    differentiation_degree - Number of degrees to differentiate the polynomial
+
+    Return
+    polynomial_constants - Vector where each cell representing the polynomial coefficients
+    polynomial_exponential - Vector where each cell represents the power to which the polynomial is raised
+    """
+    # Initialize the constant and exponent vectors representing only the variable terms with no coefficients
+    # Exponential Example: [0 1 2] represents the exponents x^0 + x^1 + x^2
+    # Constants Example: [4 0 4] would represent the constants: [4]x^0 + [0]x^1 +[4]x^2
+    polynomial_exponential = np.reshape(
+        np.arange(polynomial_degree + 1, dtype=int), (polynomial_degree + 1, 1))
+    polynomial_constants = np.reshape(
+        np.ones(polynomial_degree + 1, dtype=int), (polynomial_degree + 1, 1))
+
+    # Differentiate polynomial representation
+    for degree in range(differentiation_degree):
         polynomial_constants *= polynomial_exponential
         polynomial_exponential = np.where(
             polynomial_exponential - 1 < 0, 0, polynomial_exponential - 1)
+
+    # Return the differentiated polynomial representation
     return polynomial_constants, polynomial_exponential
 
 
-def polynomial_cost_function(poly_deg, diff_deg):
+def time_dependent_cost(polynomial_degree, differentiation_degrees):
     """
+    This function creates a matrix representing the portions of the cost function dependent
+    on time. It does this by creating a polynomial and differentiates it according to the parameters.
+    It then takes the outer product of the polynomial with itself and integrates the outer product. 
 
+    Parameters
+    polynomial_degree - Degree of the polynomial
+    differentiation_degree - Number of degrees to differentiate the polynomial
+
+    Return
+    Outer product of the differentiated polynomial
     """
-    # Differentiate polynomial
-    polynomial_constants, polynomial_exponential = differentiate_polynomial(poly_deg,
-                                                                            diff_deg)
+    # Get differentiated polynomial
+    polynomial_constants, polynomial_exponential = differentiate_polynomial(
+        polynomial_degree, differentiation_degrees)
 
-    # square polynomial to make cost function quadratic
-    polynomial_exponential_matrix = polynomial_exponential @ polynomial_exponential.T
-    polynomial_constants_matrix = polynomial_constants @ polynomial_constants.T
+    # Take polynomial outer product for the cost function quadratic
+    cost_exponentials = polynomial_exponential @ polynomial_exponential.T
+    cost_constants = polynomial_constants @ polynomial_constants.T
 
-    # Integrate cost function integrand
-    nonzero = np.nonzero(polynomial_constants_matrix)
-    polynomial_exponential_matrix[nonzero] += 1
-    polynomial_constants_matrix[nonzero] = np.divide(
-        polynomial_constants_matrix[nonzero], polynomial_exponential_matrix[nonzero])
-    # cost_function_matrix = polynomial_constants_matrix * \
-    #     (np.power(tf, polynomial_exponential_matrix) -
-    #      np.power(ti, polynomial_exponential_matrix))
+    # Integrate outer product symbolically
+    nonzero_indices = np.nonzero(cost_constants)
+    cost_exponentials[nonzero_indices] += 1
+    cost_constants[nonzero_indices] = np.divide(
+        cost_constants[nonzero_indices], cost_exponentials[nonzero_indices])
 
-    return polynomial_constants_matrix, polynomial_exponential_matrix
+    # Return integrated outer product of differentiated polynomail
+    return cost_constants, cost_exponentials
 
 
-def full_cost_matrix(poly_deg, diff_deg, task_space_size):
+def full_task_space_time_dependent_cost(polynomial_degree, differentiation_degree, task_space_size):
     """
-    """
-    polynomial_constants, polynomial_exponential = polynomial_cost_function(
-        poly_deg, diff_deg)
-    cost_matrix_size = (poly_deg + 1) * task_space_size
-    cost_constants_matrix = np.zeros([cost_matrix_size, cost_matrix_size])
-    cost_exponential_matrix = np.zeros([cost_matrix_size, cost_matrix_size])
+    The trajectory can be solved for simultaneously across all taskspace variables
+    by placing all of the cost terms in a giant sparse matrix.  
 
+    Parameters
+    polynomial_degree - Degree of the polynomial
+    differentiation_degree - Number of degrees to differentiate the polynomial
+    task_space_size - Size of the task space
+
+    Return
+    Matrix with cost matrices for all task space variables
+    """
+    # Calculate the cost terms dependent on time
+    cost_constants, cost_exponentials = time_dependent_cost(
+        polynomial_degree, differentiation_degree)
+
+    # Initialize full cost matrix as zeros
+    cost_matrix_size = (polynomial_degree + 1) * task_space_size
+    full_cost_matrix_constants = np.zeros([cost_matrix_size, cost_matrix_size])
+    full_cost_matrix_exponentials = np.zeros(
+        [cost_matrix_size, cost_matrix_size])
+
+    # Populate full cost matrix, with each task variable getting its own rows an columns
     for i in range(task_space_size):
-        lb = (poly_deg + 1) * i
-        ub = (poly_deg + 1) * (i + 1)
-        cost_constants_matrix[lb: ub, lb: ub] = polynomial_constants
-        cost_exponential_matrix[lb: ub, lb: ub] = polynomial_exponential
+        lb = (polynomial_degree + 1) * i
+        ub = (polynomial_degree + 1) * (i + 1)
+        full_cost_matrix_constants[lb: ub, lb: ub] = cost_constants
+        full_cost_matrix_exponentials[lb: ub, lb: ub] = cost_exponentials
 
-    return cost_constants_matrix, cost_exponential_matrix
+    # Return full cost matrix
+    return full_cost_matrix_constants, full_cost_matrix_exponentials
 
 
-def polynomial_constraint_matrix(poly_deg, constraint_deg):
+def polynomial_constraints(polynomial_degree, constraint_degree):
     """
+    This function creates contraint functions for differentiating a
+    polynomial to different degrees
+
+    Parameters
+    polynomial_degree - Degree of the polynomial
+    constraint_degree - Number of degrees of differentiation to which the polynomial is contrained
+
+    Return
+    Polynomial constraints
     """
-    # Create constraints matrix
+    # Initialize constraints polynomials
     constraint_constants = np.array(
-        [], dtype=np.int64).reshape(0, poly_deg + 1)
+        [], dtype=np.int64).reshape(0, polynomial_degree + 1)
     constraint_exponentials = np.array(
-        [], dtype=np.int64).reshape(0, poly_deg + 1)
-    for deg in range(constraint_deg):
-        constant_vec, exponential_vec = differentiate_polynomial(poly_deg, deg)
+        [], dtype=np.int64).reshape(0, polynomial_degree + 1)
+
+    # Add to the constraints for each degree of differentiation
+    for degree in range(constraint_degree):
+        constant_vec, exponential_vec = differentiate_polynomial(
+            polynomial_degree, degree)
         constraint_constants = np.vstack(
             (constraint_constants, constant_vec.T))
         constraint_exponentials = np.vstack(
             (constraint_exponentials, exponential_vec.T))
 
+    # Return constraints for each degree of polynomial differentiation
     return constraint_constants, constraint_exponentials
 
 
-def full_constraints_matrix(poly_deg, constraint_deg, task_space_size):
+def full_task_space_constraints(polynomial_degree, constraint_degree, task_space_size):
     """
-    """
-    constraint_constants, constraint_exponentials = polynomial_constraint_matrix(
-        poly_deg, constraint_deg)
-    constraint_matrix_cols = (poly_deg + 1) * task_space_size
-    constraint_matrix_rows = constraint_deg * task_space_size
-    constraint_constants_matrix = np.zeros(
-        [constraint_matrix_rows, constraint_matrix_cols])
-    constraint_exponential_matrix = np.zeros(
-        [constraint_matrix_rows, constraint_matrix_cols])
+    The solutions to the full task space can be found simultaneously by placing all of
+    the constraints in a giant matrix
 
+    Parameters
+    polynomial_degree - Degree of the polynomial
+    constraint_degree - Number of degrees of differentiation to which the polynomial is contrained
+    task_space_size - Size of the task space
+
+    Return
+    Full task space constraints
+    """
+    # Get generic constraint for a differentiated polynomial
+    constraint_constants, constraint_exponentials = polynomial_constraints(
+        polynomial_degree, constraint_degree)
+
+    # Initialize full task space constrains as zeros
+    num_constraint_cols = (polynomial_degree + 1) * task_space_size
+    num_constraint_rows = constraint_degree * task_space_size
+    full_constraint_constants = np.zeros(
+        [num_constraint_rows, num_constraint_cols])
+    full_constraint_exponential = np.zeros(
+        [num_constraint_rows, num_constraint_cols])
+
+    # Populate full constraint matrix
     for i in range(task_space_size):
-        lb = (poly_deg + 1) * i
-        ub = (poly_deg + 1) * (i + 1)
-        for deg in range(constraint_deg):
-            row = constraint_deg * i + deg
-            constraint_constants_matrix[row,
-                                        lb:ub] = constraint_constants[deg, :]
-            constraint_exponential_matrix[row,
-                                          lb:ub] = constraint_exponentials[deg, :]
+        lb = (polynomial_degree + 1) * i
+        ub = (polynomial_degree + 1) * (i + 1)
+        for deg in range(constraint_degree):
+            row = constraint_degree * i + deg
+            full_constraint_constants[row,
+                                      lb:ub] = constraint_constants[deg, :]
+            full_constraint_exponential[row,
+                                        lb:ub] = constraint_exponentials[deg, :]
 
-    return constraint_constants_matrix, constraint_exponential_matrix
+    # Return full constraint matrix
+    return full_constraint_constants, full_constraint_exponential
 
 
 def trajectory(polynomial_degree, differentiation_degree,
-               time_waypoints, oos_waypoints):
+               time_waypoints, pos_waypoints):
     """
     """
     num_waypoints = time_waypoints.shape[0]
     task_space_size = pos_waypoints.shape[1]
 
-    cost_constants_matrix, cost_exponential_matrix = full_cost_matrix(
+    cost_constants_matrix, cost_exponential_matrix = full_task_space_time_dependent_cost(
         polynomial_degree, differentiation_degree, task_space_size)
 
-    constraint_constants_matrix, constraint_exponentials_matrix = full_constraints_matrix(
+    constraint_constants_matrix, constraint_exponentials_matrix = full_task_space_constraints(
         polynomial_degree, 3, task_space_size)
 
     tf = time_waypoints[1]
