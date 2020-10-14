@@ -8,7 +8,7 @@ from mpl_toolkits import mplot3d
 def differentiate_polynomial(polynomial_degree, differentiation_degree):
     """
     This function creates a representation of polynomial with no coefficients
-    and then differentiates the polynomial returning the new polynomial with 
+    and then differentiates the polynomial returning the new polynomial with
     constant multipliers
 
     Parameters
@@ -41,7 +41,7 @@ def time_dependent_cost(polynomial_degree, differentiation_degrees):
     """
     This function creates a matrix representing the portions of the cost function dependent
     on time. It does this by creating a polynomial and differentiates it according to the parameters.
-    It then takes the outer product of the polynomial with itself and integrates the outer product. 
+    It then takes the outer product of the polynomial with itself and integrates the outer product.
 
     Parameters
     polynomial_degree - Degree of the polynomial
@@ -71,7 +71,7 @@ def time_dependent_cost(polynomial_degree, differentiation_degrees):
 def full_task_space_time_dependent_cost(polynomial_degree, differentiation_degree, task_space_size):
     """
     The trajectory can be solved for simultaneously across all taskspace variables
-    by placing all of the cost terms in a giant sparse matrix.  
+    by placing all of the cost terms in a giant sparse matrix.
 
     Parameters
     polynomial_degree - Degree of the polynomial
@@ -174,7 +174,7 @@ def full_task_space_constraints(polynomial_degree, constraint_degree, task_space
 
 
 def qp_trajectory(polynomial_degree, differentiation_degree,
-                  time_waypoints, pos_waypoints):
+                  time_waypoints, pos_waypoints, vel_waypoints):
     """
     This function determins an Nth degree continuous polynomial for each variable
     in the task space that minimizes the cost of the polynomial against the Mth derivative
@@ -199,35 +199,40 @@ def qp_trajectory(polynomial_degree, differentiation_degree,
     constraint_constants_matrix, constraint_exponentials_matrix = full_task_space_constraints(
         polynomial_degree, 3, task_space_size)
 
-    # Numerically integrate cost function
-    tf = time_waypoints[1]
-    ti = time_waypoints[0]
-    cost_function_matrix = cost_constants_matrix * (np.power(tf, cost_exponential_matrix) -
-                                                    np.power(ti, cost_exponential_matrix))
+    coefficients = {}
+    # Iterate through each waypoint
+    for time in range(time_waypoints.shape[0] - 1):
+        # Numerically integrate cost function
+        ti = time_waypoints[time]
+        tf = time_waypoints[time + 1]
+        cost_function_matrix = cost_constants_matrix * (np.power(tf, cost_exponential_matrix) -
+                                                        np.power(ti, cost_exponential_matrix))
 
-    # Create constraint matrix for time bounds
-    constraint_start_matrix = constraint_constants_matrix * \
-        np.power(ti, constraint_exponentials_matrix)
-    constraint_goal_matrix = constraint_constants_matrix * \
-        np.power(tf, constraint_exponentials_matrix)
-    constraint_function_matrix = np.vstack(
-        (constraint_start_matrix, constraint_goal_matrix))
+        # Create constraint matrix for time bounds
+        constraint_start_matrix = constraint_constants_matrix * \
+            np.power(ti, constraint_exponentials_matrix)
+        constraint_goal_matrix = constraint_constants_matrix * \
+            np.power(tf, constraint_exponentials_matrix)
+        constraint_function_matrix = np.vstack(
+            (constraint_start_matrix, constraint_goal_matrix))
 
-    # Build a righthand-side vector using the constraints
-    constraint_start = np.zeros(constraint_constants_matrix.shape[0])
-    constraint_goal = np.zeros(constraint_constants_matrix.shape[0])
-    constraint_start[::3] = pos_waypoints[0, :]
-    constraint_goal[::3] = pos_waypoints[1, :]
-    rhs = np.hstack(
-        (np.zeros(cost_function_matrix.shape[0]), constraint_start, constraint_goal))
+        # Build a righthand-side vector using the constraints
+        constraint_start = np.zeros(constraint_constants_matrix.shape[0])
+        constraint_goal = np.zeros(constraint_constants_matrix.shape[0])
+        constraint_start[::3] = pos_waypoints[time, :]
+        constraint_start[1::3] = vel_waypoints[time, :]
+        constraint_goal[::3] = pos_waypoints[time+1, :]
+        constraint_goal[1::3] = vel_waypoints[time+1, :]
+        rhs = np.hstack(
+            (np.zeros(cost_function_matrix.shape[0]), constraint_start, constraint_goal))
 
-    # Solution vector from lagrange multipliers [ lagrange multipliers, coefficients ].T
-    lagrange_multipliers_and_coefficients = lagrange_multipliers_solve(cost_function_matrix,
-                                                                       constraint_function_matrix, np.reshape(rhs, (rhs.shape[0], 1)))
+        # Solution vector from lagrange multipliers [ lagrange multipliers, coefficients ].T
+        lagrange_multipliers_and_coefficients = lagrange_multipliers_solve(cost_function_matrix,
+                                                                           constraint_function_matrix, np.reshape(rhs, (rhs.shape[0], 1)))
 
-    # Strip lagrange multipliers from the solution and reshape coefficients so each row corresponds to a task space
-    coefficients = np.reshape(lagrange_multipliers_and_coefficients[:-constraint_function_matrix.shape[0]],
-                              (task_space_size, polynomial_degree+1))
+        # Strip lagrange multipliers from the solution and reshape coefficients so each row corresponds to a task space
+        coefficients[time] = np.reshape(lagrange_multipliers_and_coefficients[:-constraint_function_matrix.shape[0]],
+                                        (task_space_size, polynomial_degree+1))
 
     # Return coefficients
     return coefficients
@@ -252,25 +257,36 @@ def lagrange_multipliers_solve(cost_matrix, constraint_matrix, rhs):
         (constraint_matrix.shape[0], constraint_matrix.shape[0]))))
     bigblock = np.hstack((block1, block2))
     # Solve for [ lagrange multipliers ; coefficients ]
-    return np.linalg.pinv(bigblock) @ rhs
+    return np.linalg.inv(bigblock) @ rhs
 
 
 if __name__ == "__main__":
     pos_waypoints = np.array([[0, 0, 0],  # x1, y1, z1
-                              [5, 3, 1]])  # x2, y2, z2
-    time_waypoints = np.array([0, 5])  # t1, t2, t3
+                              [5, 5, 5],  # x2, y2, z2
+                              [10, 0, 5],  # x3, y3, z3
+                              [5, -5, 5],  # x4, y4, z4
+                              [0, 0, 0]])  # x5, y5, z5
+    vel_waypoints = np.array([[0, 0, 0],  # vx1, vy1, vz1
+                              [1, 0, 0],  # vx2, vy2, vz2
+                              [0, -1, 0],  # vx3, vy3, vz3
+                              [-1, 0, 0],  # vx4, vy4, vz4
+                              [0, 0, 0]])  # vx5, vy5, vz5
+    time_waypoints = np.array([0, 5, 10, 15, 20])  # t1, t2, t3
     polynomial_degree = 7
     differentiation_degree = 4
     coeffs = qp_trajectory(polynomial_degree, differentiation_degree,
-                           time_waypoints, pos_waypoints)
-
-    times = np.linspace(0, 5, 11)
-    x = np.array([np.polyval(np.flip(coeffs[0, :], axis=0), t) for t in times])
-    y = np.array([np.polyval(np.flip(coeffs[1, :], axis=0), t) for t in times])
-    z = np.array([np.polyval(np.flip(coeffs[2, :], axis=0), t) for t in times])
+                           time_waypoints, pos_waypoints, vel_waypoints)
 
     fig = plt.figure()
     ax = plt.axes(projection="3d")
+    for i in range(time_waypoints.shape[0]-1):
+        times = np.linspace(time_waypoints[i], time_waypoints[i+1], 11)
+        x = np.array([np.polyval(np.flip(coeffs[i][0, :], axis=0), t)
+                      for t in times])
+        y = np.array([np.polyval(np.flip(coeffs[i][1, :], axis=0), t)
+                      for t in times])
+        z = np.array([np.polyval(np.flip(coeffs[i][2, :], axis=0), t)
+                      for t in times])
 
-    ax.plot3D(x, y, z, 'gray')
+        ax.plot3D(x, y, z)
     plt.show()
