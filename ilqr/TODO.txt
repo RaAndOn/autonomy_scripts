@@ -1,0 +1,1 @@
+- Get vehicle to be zero velocity at the end of trajectory
