@@ -2,7 +2,6 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits import mplot3d
 
 
 def differentiate_polynomial(polynomial_degree, differentiation_degree):
@@ -64,13 +63,13 @@ def time_dependent_cost(polynomial_degree, differentiation_degrees):
     cost_constants[nonzero_indices] = np.divide(
         cost_constants[nonzero_indices], cost_exponentials[nonzero_indices])
 
-    # Return integrated outer product of differentiated polynomail
+    # Return integrated outer product of differentiated polynomial
     return cost_constants, cost_exponentials
 
 
 def full_task_space_time_dependent_cost(polynomial_degree, differentiation_degree, task_space_size):
     """
-    The trajectory can be solved for simultaneously across all taskspace variables
+    The trajectory can be solved for simultaneously across all task space variables
     by placing all of the cost terms in a giant sparse matrix.
 
     Parameters
@@ -104,12 +103,12 @@ def full_task_space_time_dependent_cost(polynomial_degree, differentiation_degre
 
 def polynomial_constraints(polynomial_degree, constraint_degree):
     """
-    This function creates contraint functions for differentiating a
+    This function creates constraint functions for differentiating a
     polynomial to different degrees
 
     Parameters
     polynomial_degree - Degree of the polynomial
-    constraint_degree - Number of degrees of differentiation to which the polynomial is contrained
+    constraint_degree - Number of degrees of differentiation to which the polynomial is constrained
 
     Return
     Polynomial constraints
@@ -140,7 +139,7 @@ def full_task_space_constraints(polynomial_degree, constraint_degree, task_space
 
     Parameters
     polynomial_degree - Degree of the polynomial
-    constraint_degree - Number of degrees of differentiation to which the polynomial is contrained
+    constraint_degree - Number of degrees of differentiation to which the polynomial is constrained
     task_space_size - Size of the task space
 
     Return
@@ -176,13 +175,13 @@ def full_task_space_constraints(polynomial_degree, constraint_degree, task_space
 def qp_trajectory(polynomial_degree, differentiation_degree,
                   time_waypoints, pos_waypoints, vel_waypoints):
     """
-    This function determins an Nth degree continuous polynomial for each variable
+    This function determines an Nth degree continuous polynomial for each variable
     in the task space that minimizes the cost of the polynomial against the Mth derivative
-    of the polynomial. The polynomials are also contrained by the time and waypoints passed in
+    of the polynomial. The polynomials are also constrained by the time and waypoints passed in
 
     Parameters
     polynomial_degree - Degree of the polynomial
-    constraint_degree - Number of degrees of differentiation to which the polynomial is contrained
+    constraint_degree - Number of degrees of differentiation to which the polynomial is constrained
     time_waypoints - Times at which each waypoint occur
     pos_waypoints - Positions defining each waypoints
 
@@ -216,7 +215,7 @@ def qp_trajectory(polynomial_degree, differentiation_degree,
         constraint_function_matrix = np.vstack(
             (constraint_start_matrix, constraint_goal_matrix))
 
-        # Build a righthand-side vector using the constraints
+        # Build a right hand-side vector using the constraints
         constraint_start = np.zeros(constraint_constants_matrix.shape[0])
         constraint_goal = np.zeros(constraint_constants_matrix.shape[0])
         constraint_start[::3] = pos_waypoints[time, :]
@@ -245,8 +244,8 @@ def lagrange_multipliers_solve(cost_matrix, constraint_matrix, rhs):
 
     Parameters
     cost_matrix - Time dependent part of the cost function
-    constraint_matrix - Contraint equations
-    rhs - [ 0 ; contraint values ]
+    constraint_matrix - Constraint equations
+    rhs - [ 0 ; constraint values ]
 
     Return
 
