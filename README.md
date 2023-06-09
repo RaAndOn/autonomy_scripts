@@ -8,4 +8,9 @@ Start and enter the docker container:
 
 ## iLQR
 
-![Alt text](./images/ilqr.gif)
+![iLQr](./images/ilqr.gif)
+
+
+## Quadratic Program Trajectory
+
+![qp_trajectory](./images/qp_trajectory.png)
