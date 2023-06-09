@@ -8,4 +8,4 @@ Start and enter the docker container:
 
 ## iLQR
 
-![Alt text](images/test2.gif)
+![Alt text](./images/test2.gif)
