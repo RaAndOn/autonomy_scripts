@@ -8,7 +8,7 @@ Start and enter the docker container:
 
 ## iLQR
 
-![iLQr](./images/ilqr.gif)
+![iLQR](./images/ilqr.gif)
 
 
 ## Quadratic Program Trajectory
